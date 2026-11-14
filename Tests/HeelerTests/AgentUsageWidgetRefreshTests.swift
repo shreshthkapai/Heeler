@@ -116,6 +116,15 @@ struct AgentUsageWidgetRefreshTests {
             id: host.id, name: host.displayName, report: complete, readAt: Self.now))
     }
 
+    @Test func aStoreShowingARefreshingReportDatesItsFiguresByTheScan() async throws {
+        let cached = try AgentUsageFixture.tokenReport(refreshing: true)
+        let scannedAt = try #require(AgentUsageLimitsView.date(cached.scan?.coveredThrough))
+        let store = AgentUsageStore(hostID: UUID()) { _, _ in .available(cached) }
+
+        await store.pullToRefresh()
+        #expect(store.figuresReadAt == scannedAt)
+    }
+
     @Test func onlyAUsageOrUsageLimitsWidgetCounts() async throws {
         for (kinds, installed) in [
             ([], false), (["dev.bybee.heeler.other"], false),

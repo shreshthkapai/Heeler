@@ -230,6 +230,14 @@ struct AgentUsageReport: Decodable, Equatable, Sendable {
     /// Claude Code's entry, when the report has one.
     var claudeProgram: Program? { programs?.first { $0.program == "claude" } }
 
+    /// When the figures were read on the Host, for a report the app read at
+    /// `readAt`. A refreshing report serves what the last run left, which
+    /// can be hours old when nothing read the Host in between.
+    func figuresDate(readAt: Date) -> Date {
+        guard refreshing == true, let scanned = AgentUsageLimitsView.date(scan?.coveredThrough) else { return readAt }
+        return min(scanned, readAt)
+    }
+
     /// A device that opted out must never show a reading cached by another query.
     func hidingClaudeLimits() -> Self {
         replacingClaudeLimits(state: "disabled", reason: nil)

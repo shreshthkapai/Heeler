@@ -1171,8 +1171,12 @@ tests and decoded by the Swift tests.
     returns to the foreground. An app refresh task, which iOS runs at its
     discretion (at most every 30 minutes), reads the stale Hosts while the
     app is closed: one short-lived SSH connection per Host with the same
-    credentials and trusted host keys, up to three re-reads 3 seconds
-    apart while `refreshing`, then close. It skips Overlay Network routes
+    credentials and trusted host keys, up to six re-reads 3 seconds
+    apart while `refreshing`, then close. A refreshing report serves the
+    last run's figures, so its reading is dated by `scan.coveredThrough`,
+    not by when the app read it: the "Updated" capsule shows its true age,
+    a newer reading the snapshot holds is kept, and the Host stays stale
+    for the next foreground or background read. It skips Overlay Network routes
     and leaves the Console suspended. Background App Refresh off, Low Power
     Mode, or a force-quit app leaves the widgets to the foreground reads. Usage
     Limits countdowns step each minute while a reset is under a day away.

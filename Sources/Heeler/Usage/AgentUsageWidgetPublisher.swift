@@ -108,7 +108,7 @@ extension UsageWidgetSnapshot.Host {
         let kept = previous?.host(reading.id).flatMap { $0.reports ? $0 : nil }
         switch reading.state {
         case .available(let report):
-            let readAt = reading.readAt ?? now
+            let readAt = report.figuresDate(readAt: reading.readAt ?? now)
             // A reading made while the app was away is newer than the
             // report the app still holds from before.
             if var kept, let keptAt = kept.readAt, keptAt > readAt {
