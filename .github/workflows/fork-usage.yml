@@ -1,0 +1,77 @@
+name: Fork Usage checks
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fork-ci/**']
+permissions:
+  contents: read
+concurrency:
+  group: fork-usage-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  usage:
+    if: github.repository == 'shreshthkapai/Heeler'
+    runs-on: xcode-27
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      HEELER_SSH_E2E_REQUIRED: '0'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: brew install xcodegen
+      - name: Record candidate and toolchain
+        run: |
+          mkdir -p build/fork-results
+          git rev-parse HEAD > build/fork-results/candidate.txt
+          xcodebuild -version
+          xcrun simctl list runtimes
+      - name: Regenerate the project and save it
+        run: |
+          make generate
+          git diff --stat -- Heeler.xcodeproj | tee build/fork-results/xcodeproj-diff.txt
+          cp Heeler.xcodeproj/project.pbxproj build/fork-results/project.pbxproj
+      - name: Build app and extensions, run Usage tests
+        env:
+          TEST_FLAGS: >-
+            CODE_SIGNING_ALLOWED=NO
+            -parallel-testing-enabled NO
+            -resultBundlePath build/fork-results/Usage.xcresult
+            -only-testing:HeelerTests/AgentUsageWidgetRefreshTests
+            -only-testing:HeelerTests/AgentUsageWidgetTests
+            -only-testing:HeelerTests/AgentUsageTests
+            -only-testing:HeelerTests/AgentUsageHostHelperTests
+            -only-testing:HeelerTests/AgentUsagePageTests
+            -only-testing:HeelerTests/AgentUsagePresentationTests
+            -only-testing:HeelerTests/AgentUsageLimitsTests
+            -only-testing:HeelerTests/AgentUsageScopeTests
+            -only-testing:HeelerTests/AgentUsageProbeTests
+            -only-testing:HeelerTests/ClaudeAccountsUsageTests
+            -only-testing:HeelerTests/UsageAccountFileTests
+        run: |
+          make test-app \
+            SIM_DESTINATION='platform=iOS Simulator,name=iPhone 17,OS=27.2' \
+            DERIVED=build/fork-derived
+      - name: Build the committed project like upstream CI
+        if: always()
+        continue-on-error: true
+        run: git checkout -- Heeler.xcodeproj && make build-ci-app 2>&1 | tail -40
+      - name: Export PNG attachments
+        if: always()
+        run: |
+          if [ -d build/fork-results/Usage.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path build/fork-results/Usage.xcresult \
+              --output-path build/fork-results/attachments || true
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: usage-${{ github.sha }}
+          path: build/fork-results
+          retention-days: 14
