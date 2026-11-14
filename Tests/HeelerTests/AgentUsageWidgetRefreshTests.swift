@@ -90,6 +90,32 @@ struct AgentUsageWidgetRefreshTests {
             host.id, readAt: Self.now.addingTimeInterval(60), now: Self.now.addingTimeInterval(interval)))
     }
 
+    @Test func aRefreshingReadingIsAsOldAsTheScanItServes() throws {
+        let (publisher, directory) = try Self.publisher()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = Self.host("Studio Mac")
+        let cached = try AgentUsageFixture.tokenReport(refreshing: true)
+        let scannedAt = try #require(AgentUsageLimitsView.date(cached.scan?.coveredThrough))
+
+        publisher.publish([Self.reading(host, .available(cached), readAt: Self.now)], now: Self.now)
+        #expect(Self.snapshot(directory)?.host(host.id)?.readAt == scannedAt)
+        #expect(publisher.isStale(host.id, readAt: nil, now: Self.now))
+    }
+
+    @Test func aRefreshingReadingNeverReplacesNewerFigures() throws {
+        let (publisher, directory) = try Self.publisher()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let host = Self.host("Studio Mac")
+        let complete = try AgentUsageFixture.report(refreshing: false)
+        let cached = try AgentUsageFixture.tokenReport(refreshing: true)
+
+        publisher.publish([Self.reading(host, .available(complete), readAt: Self.now)], now: Self.now)
+        let later = Self.now.addingTimeInterval(60)
+        publisher.publish([Self.reading(host, .available(cached), readAt: later)], now: later)
+        #expect(Self.snapshot(directory)?.host(host.id) == UsageWidgetSnapshot.Host(
+            id: host.id, name: host.displayName, report: complete, readAt: Self.now))
+    }
+
     @Test func onlyAUsageOrUsageLimitsWidgetCounts() async throws {
         for (kinds, installed) in [
             ([], false), (["dev.bybee.heeler.other"], false),
@@ -161,6 +187,21 @@ struct AgentUsageWidgetRefreshTests {
         overlayOnly.routes = [HostRoute(address: "100.64.0.7", overlayNetworkID: UUID())]
         #expect(await refresh.read(overlayOnly, false) == nil)
         #expect(connector.connects.withLock { $0 } == 1)
+    }
+
+    @Test func theBackgroundReadWaitsOutAColdRefresh() async throws {
+        let transport = ScriptedTransport()
+        await transport.setHeelerPlugin(.success(.init(pluginRoot: "/plugins/heeler", version: "0.7.0")))
+        await transport.setAgentUsage(.success(try AgentUsageFixture.report(refreshing: true)))
+        let complete = try AgentUsageFixture.report(refreshing: false)
+        let pauses = PauseCount()
+        // A Helper left quiet for half an hour took 13 seconds to refresh,
+        // so the run finishes only after the fifth 3-second pause.
+        let refresh = Self.backgroundRead(RecordingConnector(transport: transport)) { _ in
+            if await pauses.next() == 5 { await transport.setAgentUsage(.success(complete)) }
+        }
+
+        #expect(await refresh.read(Self.host("Studio Mac"), true) == .available(complete))
     }
 
     private static func backgroundRead(
@@ -426,6 +467,15 @@ struct AgentUsageWidgetRefreshTests {
             try await Task.sleep(for: .milliseconds(5))
         }
         #expect(await condition(), comment)
+    }
+}
+
+private actor PauseCount {
+    private var count = 0
+
+    func next() -> Int {
+        count += 1
+        return count
     }
 }
 
