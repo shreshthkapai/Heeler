@@ -50,15 +50,19 @@ jobs:
             xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b || continue
             xcrun simctl status_bar "$udid" override --time 9:41 --batteryLevel 100 --cellularBars 4 --wifiBars 3
             xcrun simctl install "$udid" "$app" || continue
+            open -a Simulator --args -CurrentDeviceUDID "$udid"
+            sleep 20
             for v in nofix equal-inward design-3 design-2 design-1; do
               xcrun simctl launch --terminate-running-process "$udid" dev.example.islandprobe -variant "$v"
               sleep 6
               xcrun simctl launch "$udid" com.apple.Preferences
               sleep 4
               xcrun simctl io "$udid" screenshot "$OUT/$want-$v.png"
+              screencapture -x "$OUT/$want-$v-screen.png"
             done
             xcrun simctl spawn "$udid" log show --last 5m --predicate 'eventMessage CONTAINS "PROBE"' > "$OUT/$want-log.txt"
             xcrun simctl shutdown "$udid"
+            killall Simulator; sleep 3
           done
           ls -la "$OUT"
       - uses: actions/upload-artifact@v4
