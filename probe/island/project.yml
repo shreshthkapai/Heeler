@@ -1,0 +1,39 @@
+name: IslandProbe
+options:
+  bundleIdPrefix: dev.example.islandprobe
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    GENERATE_INFOPLIST_FILE: YES
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: "1.0"
+targets:
+  IslandProbe:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    dependencies:
+      - target: IslandProbeWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandprobe
+        INFOPLIST_KEY_NSSupportsLiveActivities: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  IslandProbeWidget:
+    type: app-extension
+    platform: iOS
+    sources: [Widget, Shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandprobe.widget
+        INFOPLIST_KEY_CFBundleDisplayName: IslandProbeWidget
+    info:
+      path: Widget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
