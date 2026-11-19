@@ -177,6 +177,14 @@ private func landParts(_ variant: String) -> (counts: (Int, Int, Int), letter: S
 }
 
 private struct LandLeading: View {
+    let variant: String
+    var body: some View {
+        if #available(iOS 27.0, *) { LandLeading27(variant: variant) } else { Leading(variant: variant) }
+    }
+}
+
+@available(iOS 27.0, *)
+private struct LandLeading27: View {
     @Environment(\.isDynamicIslandLimitedInWidth) private var limited
     let variant: String
     var body: some View {
@@ -189,6 +197,14 @@ private struct LandLeading: View {
 }
 
 private struct LandTrailing: View {
+    let variant: String
+    var body: some View {
+        if #available(iOS 27.0, *) { LandTrailing27(variant: variant) } else { Trailing(variant: variant) }
+    }
+}
+
+@available(iOS 27.0, *)
+private struct LandTrailing27: View {
     @Environment(\.isDynamicIslandLimitedInWidth) private var limited
     let variant: String
     var body: some View {
