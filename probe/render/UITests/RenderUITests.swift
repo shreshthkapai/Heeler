@@ -30,8 +30,18 @@ final class RenderUITests: XCTestCase {
         variant.replacingOccurrences(of: "|", with: "_").replacingOccurrences(of: ",", with: "-")
     }
 
+    private let other = XCUIApplication(bundleIdentifier: "dev.example.islandrender.other")
+
+    /// The first activity of a run takes longer to reach the island.
+    private func warmUp() {
+        start("dev.example.islandrender", "|0,0,1|")
+        XCUIDevice.shared.press(.home)
+        sleep(6)
+    }
+
     func test1Compact() {
         start("dev.example.islandrender.other", "none")
+        warmUp()
         for variant in [
             "|0,0,2|", "|0,3,0|", "|1,0,0|", "|1,2,0|", "|1,0,4|", "|0,2,3|", "|1,1,1|",
             "|1,12,15|", "|10,12,15|", "L|1,0,0|", "L|0,2,3|", "L|1,1,1|", "MB|1,1,1|", "MB|1,12,15|",
@@ -43,9 +53,10 @@ final class RenderUITests: XCTestCase {
     }
 
     func test2Minimal() {
+        start("dev.example.islandrender.other", "other")
+        warmUp()
         for variant in ["|1,3,2|", "|0,1,2|", "|0,0,5|", "|1,0,0|", "|0,0,12|"] {
             start("dev.example.islandrender", variant)
-            start("dev.example.islandrender.other", "other")
             XCUIDevice.shared.press(.home)
             record("minimal-\(slug(variant))")
         }
@@ -53,8 +64,12 @@ final class RenderUITests: XCTestCase {
 
     func test3Landscape() {
         start("dev.example.islandrender.other", "none")
+        warmUp()
         for variant in ["L|1,3,2|", "|1,3,2|", "L|0,0,5|", "|1,0,0|", "MB|0,0,12|"] {
             start("dev.example.islandrender", variant)
+            // iOS hides an app's own island while it is in front.
+            other.activate()
+            sleep(2)
             XCUIDevice.shared.orientation = .landscapeLeft
             record("landscape-\(slug(variant))")
             XCUIDevice.shared.orientation = .portrait
@@ -64,6 +79,7 @@ final class RenderUITests: XCTestCase {
 
     func test4Expanded() {
         start("dev.example.islandrender.other", "none")
+        warmUp()
         for variant in [
             "L|1,1,1|bdw", "L|0,2,1|ddw", "L|0,0,3|www", "L|1,3,2|bdddw", "L|0,0,5|wwwww",
             "|0,1,1|dw", "L|1,0,2|",
