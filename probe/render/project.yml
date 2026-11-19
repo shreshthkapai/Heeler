@@ -1,0 +1,103 @@
+name: IslandRender
+options:
+  bundleIdPrefix: dev.example.islandrender
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    GENERATE_INFOPLIST_FILE: YES
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: "1.0"
+    INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+targets:
+  IslandRender:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    dependencies:
+      - target: IslandRenderWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandrender
+        INFOPLIST_KEY_NSSupportsLiveActivities: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  # The real island: Heeler's widget sources less its @main bundle and the
+  # Usage widgets, the same shared sources the HeelerWidgets target lists.
+  IslandRenderWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widget
+        excludes: ["Info.plist"]
+      - Shared
+      - ../../Sources/HeelerWidgets/AgentLiveActivityWidget.swift
+      - ../../Sources/HeelerWidgets/AgentActivityDecryptor.swift
+      - ../../Sources/Heeler/Resources/Localizable.xcstrings
+      - ../../Sources/HeelerActivityCore
+      - ../../Sources/HeelerNotificationCore
+      - ../../Sources/Heeler/Support/Base64URL.swift
+      - ../../Sources/Heeler/Transport/SecretStore.swift
+      - ../../Sources/Heeler/Transport/Generated/HerdrAPITypes.swift
+      - ../../Sources/Heeler/Transport/JSONValue.swift
+      - ../../Sources/Heeler/Console/AgentStatusPalette.swift
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandrender.widget
+        INFOPLIST_KEY_CFBundleDisplayName: IslandRenderWidget
+    info:
+      path: Widget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  IslandRenderOther:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    scheme: {}
+    dependencies:
+      - target: IslandRenderOtherWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandrender.other
+        INFOPLIST_KEY_NSSupportsLiveActivities: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+  IslandRenderOtherWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: OtherWidget
+        excludes: ["Info.plist"]
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandrender.other.widget
+        INFOPLIST_KEY_CFBundleDisplayName: IslandRenderOtherWidget
+    info:
+      path: OtherWidget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+  IslandRenderUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [UITests]
+    dependencies:
+      - target: IslandRender
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandrender.uitests
+        TEST_TARGET_NAME: IslandRender
+schemes:
+  IslandRender:
+    build:
+      targets:
+        IslandRender: all
+        IslandRenderUITests: [test]
+    test:
+      targets: [IslandRenderUITests]

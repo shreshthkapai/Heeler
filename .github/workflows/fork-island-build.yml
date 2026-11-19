@@ -1,0 +1,120 @@
+name: Fork island build
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fork-ci/island-build']
+permissions:
+  contents: read
+concurrency:
+  group: fork-island-build-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+jobs:
+  unit:
+    if: github.repository == 'shreshthkapai/Heeler'
+    runs-on: xcode-27
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      OUT: ${{ github.workspace }}/unit-results
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: make verify-ssh-artifacts
+      - name: Build app and tests
+        run: |
+          mkdir -p "$OUT"
+          make build-ci-app > "$OUT/build.log" 2>&1; status=$?
+          tail -40 "$OUT/build.log"; grep -E "error:" "$OUT/build.log" | head -40
+          exit $status
+      - name: Run the island and relevance suites
+        run: |
+          xcrun simctl list runtimes -j > "$OUT/runtimes.json"
+          type=com.apple.CoreSimulator.SimDeviceType.iPhone-16-Plus
+          runtime=$(python3 -c "
+          import json,sys
+          rs=[r for r in json.load(open(sys.argv[1]))['runtimes'] if r['platform']=='iOS' and r['isAvailable'] and any(d['identifier']==sys.argv[2] for d in r.get('supportedDeviceTypes',[]))]
+          print(rs[-1]['identifier'])" "$OUT/runtimes.json" "$type")
+          udid=$(xcrun simctl create unit "$type" "$runtime")
+          xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
+          set +e
+          xcodebuild test-without-building -project Heeler.xcodeproj -scheme Heeler \
+            -destination "id=$udid" -derivedDataPath .ci/app-derived \
+            -clonedSourcePackagesDirPath .ci/source-packages \
+            -resultBundlePath "$OUT/unit.xcresult" \
+            -only-testing:HeelerTests/AgentActivityPresentationTests \
+            -only-testing:HeelerTests/AgentActivityContentStateTests \
+            -only-testing:HeelerTests/LiveActivityHostSnapshotTests \
+            -only-testing:HeelerTests/AgentActivityContentBuilderTests \
+            > "$OUT/test.log" 2>&1
+          status=$?
+          grep -E "✘|✔ Test run|Test run with|failed|passed after|error:" "$OUT/test.log" | tail -80
+          xcrun xcresulttool export attachments --path "$OUT/unit.xcresult" --output-path "$OUT/attachments"
+          rm -rf "$OUT/unit.xcresult"
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: island-unit-${{ github.sha }}
+          path: unit-results
+          retention-days: 14
+  render:
+    if: github.repository == 'shreshthkapai/Heeler'
+    runs-on: xcode-27
+    timeout-minutes: 120
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+      OUT: ${{ github.workspace }}/render-results
+    steps:
+      - uses: actions/checkout@v5
+      - run: brew install xcodegen
+      - name: Build the render apps
+        working-directory: probe/render
+        run: |
+          mkdir -p "$OUT"
+          xcodegen generate
+          xcodebuild -project IslandRender.xcodeproj -scheme IslandRender -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build build-for-testing \
+            > "$OUT/build.log" 2>&1; status=$?
+          tail -20 "$OUT/build.log"; grep -E "error:" "$OUT/build.log" | head -40
+          [ $status -eq 0 ] || exit $status
+          xcodebuild -project IslandRender.xcodeproj -scheme IslandRenderOther -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build build | tail -5
+      - name: Render the island on each phone
+        working-directory: probe/render
+        run: |
+          set +e
+          xcrun simctl list runtimes -j > "$OUT/runtimes.json"
+          other=build/Build/Products/Debug-iphonesimulator/IslandRenderOther.app
+          for want in iPhone-16-Plus iPhone-18-Pro iPhone-16-Pro; do
+            type="com.apple.CoreSimulator.SimDeviceType.$want"
+            runtime=$(python3 -c "
+          import json,sys
+          rs=[r for r in json.load(open(sys.argv[1]))['runtimes'] if r['platform']=='iOS' and r['isAvailable'] and any(d['identifier']==sys.argv[2] for d in r.get('supportedDeviceTypes',[]))]
+          print(rs[-1]['identifier'] if rs else '')" "$OUT/runtimes.json" "$type")
+            echo "== $want on ${runtime:-no runtime}"
+            [ -n "$runtime" ] || continue
+            udid=$(xcrun simctl create "render-$want" "$type" "$runtime") || continue
+            xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
+            xcrun simctl status_bar "$udid" override --time 9:41 --batteryLevel 100 --cellularBars 4 --wifiBars 3
+            xcrun simctl install "$udid" "$other"
+            xcodebuild test-without-building -project IslandRender.xcodeproj -scheme IslandRender \
+              -destination "id=$udid" -derivedDataPath build -resultBundlePath "$OUT/$want.xcresult" \
+              > "$OUT/$want-test.log" 2>&1
+            echo "test exit $?"
+            xcrun xcresulttool export attachments --path "$OUT/$want.xcresult" --output-path "$OUT/$want-attachments"
+            rm -rf "$OUT/$want.xcresult"
+            xcrun simctl shutdown "$udid"
+          done
+          cp ~/Library/Logs/DiagnosticReports/*Widget* "$OUT/" 2>/dev/null
+          ls -la "$OUT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: island-render-${{ github.sha }}
+          path: render-results
+          retention-days: 14
