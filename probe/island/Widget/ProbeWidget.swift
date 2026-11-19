@@ -89,7 +89,7 @@ private struct Trailing: View {
 private let ink = Color(red: 0x1e / 255, green: 0x1e / 255, blue: 0x2e / 255)
 
 /// Minimal B, transcribed from minB() and glyph() in the approved Island Scenarios page.
-/// It fits the box iOS proposes: one status fills it; with more, the circle shrinks so the dots fit underneath.
+/// One status fills the 20 pt box; with more, the circle shrinks so the dots fit underneath inside it.
 private struct MinimalB: View {
     let blocked: Int
     let done: Int
@@ -107,11 +107,11 @@ private struct MinimalB: View {
         }
     }
 
+    /// iOS sizes the minimal slot to the content's ideal size, so the box is asked for explicitly:
+    /// 20 x 20 pt is what the minimal slot gave a 20 pt wide view in the Simulator.
     var body: some View {
-        GeometryReader { geo in
-            ZStack { content(min(geo.size.width, geo.size.height)) }
-                .frame(width: geo.size.width, height: geo.size.height)
-        }
+        ZStack { content(20) }
+            .frame(width: 20, height: 20)
     }
 
     @ViewBuilder
