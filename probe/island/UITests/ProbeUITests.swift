@@ -37,7 +37,7 @@ final class ProbeUITests: XCTestCase {
     }
 
     func test2TwoActivities() {
-        for variant in ["min-132", "min-005", "min-100"] {
+        for variant in ["min-132", "min-012", "min-005", "min-100"] {
             start("dev.example.islandprobe", variant)
             start("dev.example.islandprobe.other", "other")
             XCUIDevice.shared.press(.home)

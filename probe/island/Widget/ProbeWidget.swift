@@ -88,7 +88,8 @@ private struct Trailing: View {
 
 private let ink = Color(red: 0x1e / 255, green: 0x1e / 255, blue: 0x2e / 255)
 
-/// Minimal B, transcribed from minB() and glyph() in the approved Island Scenarios page (r = 10).
+/// Minimal B, transcribed from minB() and glyph() in the approved Island Scenarios page.
+/// It fits the box iOS proposes: one status fills it; with more, the circle shrinks so the dots fit underneath.
 private struct MinimalB: View {
     let blocked: Int
     let done: Int
@@ -107,39 +108,52 @@ private struct MinimalB: View {
     }
 
     var body: some View {
-        ZStack {
-            if let first = present.first {
-                topMark(first.0, first.1).offset(y: -2)
-                HStack(spacing: 2.2) {
-                    ForEach(Array(present.dropFirst().enumerated()), id: \.offset) { _, item in
-                        Circle().fill(color(item.0)).frame(width: 4.8, height: 4.8)
-                    }
-                }
-                .offset(y: 12.5)
-            }
+        GeometryReader { geo in
+            ZStack { content(min(geo.size.width, geo.size.height)) }
+                .frame(width: geo.size.width, height: geo.size.height)
         }
-        .frame(width: 20, height: 36)
     }
 
     @ViewBuilder
-    private func topMark(_ status: Status, _ count: Int) -> some View {
+    private func content(_ box: CGFloat) -> some View {
+        if let first = present.first {
+            let rest = Array(present.dropFirst())
+            if rest.isEmpty {
+                topMark(first.0, first.1, diameter: box)
+            } else {
+                let dot = box * 0.2
+                let diameter = box - dot - box * 0.075
+                topMark(first.0, first.1, diameter: diameter).offset(y: -box / 2 + diameter / 2)
+                HStack(spacing: dot * 0.5) {
+                    ForEach(Array(rest.enumerated()), id: \.offset) { _, item in
+                        Circle().fill(color(item.0)).frame(width: dot, height: dot)
+                    }
+                }
+                .offset(y: box / 2 - dot / 2)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func topMark(_ status: Status, _ count: Int, diameter: CGFloat) -> some View {
+        let r = diameter / 2
         let twoDigits = count >= 10
         if status == .working {
             ZStack {
-                Circle().stroke(heelerWorking.opacity(0.28), lineWidth: 2.9)
+                Circle().stroke(heelerWorking.opacity(0.28), lineWidth: r * 0.29)
                 Circle().trim(from: 0, to: 0.7)
-                    .stroke(heelerWorking, style: StrokeStyle(lineWidth: 2.9, lineCap: .round))
+                    .stroke(heelerWorking, style: StrokeStyle(lineWidth: r * 0.29, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                Text("\(count)").font(.system(size: twoDigits ? 10 : 11.5, weight: .bold)).foregroundStyle(heelerWorking)
+                Text("\(count)").font(.system(size: twoDigits ? r : r * 1.15, weight: .bold)).foregroundStyle(heelerWorking)
             }
-            .frame(width: 16.8, height: 16.8)
-            .frame(width: 20, height: 20)
+            .frame(width: r * 1.68, height: r * 1.68)
+            .frame(width: diameter, height: diameter)
         } else {
             ZStack {
                 Circle().fill(color(status))
-                Text("\(count)").font(.system(size: twoDigits ? 10.5 : 12, weight: .bold)).foregroundStyle(ink)
+                Text("\(count)").font(.system(size: twoDigits ? r * 1.05 : r * 1.2, weight: .bold)).foregroundStyle(ink)
             }
-            .frame(width: 20, height: 20)
+            .frame(width: diameter, height: diameter)
         }
     }
 }
@@ -149,6 +163,8 @@ private func minimalCounts(_ variant: String) -> (Int, Int, Int)? {
     case "min-132": return (1, 3, 2)
     case "min-005": return (0, 0, 5)
     case "min-100": return (1, 0, 0)
+    case "min-030": return (0, 3, 0)
+    case "min-012": return (0, 1, 2)
     default: return nil
     }
 }
