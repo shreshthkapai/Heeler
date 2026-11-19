@@ -110,33 +110,101 @@ struct AgentActivityPresentationTests {
         #expect(workingOnly.attentionItems.map(\.count) == [3])
     }
 
-    @Test func islandMarksUseAttentionOrderAndReplaceTheLastSlotOnOverflow() {
-        let mixed = AgentActivityIslandPresentation(
-            presentation: .countsOnly(counts: .init(working: 1, blocked: 1, done: 1)),
-            hostID: "host", hostSnapshot: nil)
-        #expect(mixed.marks.map(\.status) == ["blocked", "done", "working"])
-        #expect(mixed.marks.allSatisfy { !$0.isOverflow })
+    private typealias Counts = AgentActivityAttributes.ContentState.Counts
+    private typealias Compact = AgentActivityIslandCompact
 
-        let seven = AgentActivityIslandPresentation(
-            presentation: .countsOnly(counts: .init(working: 7, blocked: 0, done: 0)),
-            hostID: "host", hostSnapshot: nil)
-        #expect(seven.marks.count == 4)
-        #expect(seven.marks.dropLast().map(\.status) == ["working", "working", "working"])
-        #expect(seven.marks.last?.isOverflow == true)
-
-        let four = AgentActivityIslandPresentation(
-            presentation: .countsOnly(counts: .init(working: 1, blocked: 2, done: 1)),
-            hostID: "host", hostSnapshot: nil)
-        #expect(four.marks.map(\.status) == ["blocked", "blocked", "done", "working"])
-        #expect(four.marks.allSatisfy { !$0.isOverflow })
-
-        let empty = AgentActivityIslandPresentation(
-            presentation: .countsOnly(counts: .init(working: 0, blocked: 0, done: 0)),
-            hostID: "host", hostSnapshot: nil)
-        #expect(empty.marks.isEmpty)
+    private func compact(_ counts: Counts, letter: String? = nil, width: CGFloat = 430) -> Compact {
+        AgentActivityIslandCompact(
+            tallies: counts.attentionItems.map { .init(status: $0.status, count: $0.count) },
+            letter: letter, screenWidth: width)
     }
 
-    @Test func islandTileRequiresTwoHostsAndAComputedLabel() {
+    @Test func compactShowsEveryStatusSplitAcrossTheCamera() {
+        let working = compact(.init(working: 2, blocked: 0, done: 0))
+        #expect(working.leading == [.symbol("working")])
+        #expect(working.trailing == [.count("working", 2)])
+
+        let two = compact(.init(working: 0, blocked: 1, done: 2))
+        #expect(two.leading == [.pair("blocked", 1)])
+        #expect(two.trailing == [.pair("done", 2)])
+
+        let three = compact(.init(working: 1, blocked: 1, done: 1))
+        #expect(three.leading == [.pair("blocked", 1), .pair("done", 1)])
+        #expect(three.trailing == [.pair("working", 1)])
+        #expect(three.letter == nil)
+    }
+
+    @Test func compactGathersStatusesLeftOfTheHostLetter() {
+        let one = compact(.init(working: 0, blocked: 1, done: 0), letter: "L")
+        #expect(one.leading == [.pair("blocked", 1)])
+        #expect(one.trailing.isEmpty)
+        #expect(one.letter == "L")
+
+        let two = compact(.init(working: 3, blocked: 0, done: 2), letter: "L")
+        #expect(two.leading == [.pair("done", 2), .pair("working", 3)])
+        #expect(two.trailing.isEmpty)
+
+        let three = compact(.init(working: 1, blocked: 1, done: 1), letter: "MB")
+        #expect(three.leading == [.pair("blocked", 1), .pair("done", 1)])
+        #expect(three.trailing == [.pair("working", 1)])
+        #expect(three.letter == "MB")
+    }
+
+    @Test func compactStepsDownToSmallerSymbolsThenNumbersOnlyAndKeepsTheLetter() {
+        let allThree = Counts(working: 1, blocked: 1, done: 1)
+        #expect(compact(allThree, width: 430).level == .full)
+        #expect(compact(allThree, width: 393).level == .small)
+
+        let big = Counts(working: 15, blocked: 1, done: 12)
+        #expect(compact(big, width: 430).level == .small)
+        let narrow = compact(big, width: 393)
+        #expect(narrow.level == .numbersOnly)
+        #expect(narrow.leading == [.count("blocked", 1), .count("done", 12)])
+        #expect(narrow.trailing == [.count("working", 15)])
+
+        let lettered = compact(.init(working: 15, blocked: 10, done: 12), letter: "MB", width: 393)
+        #expect(lettered.level == .numbersOnly)
+        #expect(lettered.letter == "MB")
+    }
+
+    @Test func compactSidesShareTheWiderSidesWidth() {
+        let level = Compact.Level.full
+        let one = compact(.init(working: 2, blocked: 0, done: 0))
+        #expect(one.sideWidth == level.symbol)
+
+        let lettered = compact(.init(working: 1, blocked: 1, done: 1), letter: "L")
+        let pair = level.symbol + level.symbolGap + level.digit
+        let trailing = pair + level.itemSpacing + level.digit
+        let leading = pair * 2 + level.itemSpacing
+        #expect(lettered.sideWidth == max(leading, trailing))
+    }
+
+    @Test func expandedShowsThreeCardsThenTheAgentsLeftOutByStatus() {
+        let agents = ["blocked", "done", "done", "done", "working"].enumerated().map {
+            agentDetail(paneID: "w1:p\($0.offset)", status: $0.element)
+        }
+        let six = AgentActivityIslandExpanded(presentation: .detailed(
+            details: .init(hostName: "Laptop", agents: agents),
+            counts: .init(working: 2, blocked: 1, done: 3)))
+        #expect(six.cards.map(\.paneID) == ["w1:p0", "w1:p1", "w1:p2"])
+        #expect(six.summary == [.init(status: "done", count: 1), .init(status: "working", count: 2)])
+        #expect(six.isOverflow)
+        #expect(six.total == 6)
+
+        let two = AgentActivityIslandExpanded(presentation: .detailed(
+            details: .init(hostName: "Laptop", agents: Array(agents.prefix(2))),
+            counts: .init(working: 0, blocked: 1, done: 1)))
+        #expect(two.cards.count == 2)
+        #expect(two.summary.isEmpty)
+
+        let countsOnly = AgentActivityIslandExpanded(
+            presentation: .countsOnly(counts: .init(working: 2, blocked: 1, done: 0)))
+        #expect(countsOnly.cards.isEmpty)
+        #expect(countsOnly.summary == [.init(status: "blocked", count: 1), .init(status: "working", count: 2)])
+        #expect(countsOnly.isOverflow == false)
+    }
+
+    @Test func islandLetterRequiresTwoHostsAndAComputedLabel() {
         let oneHost = LiveActivityHostSnapshot(v: 1, hosts: [
             .init(id: "host", name: "Laptop", label: "L"),
         ])
@@ -147,61 +215,28 @@ struct AgentActivityPresentationTests {
         let one = AgentActivityIslandPresentation(
             presentation: .countsOnly(counts: .init(working: 1, blocked: 0, done: 0)),
             hostID: "host", hostSnapshot: oneHost)
-        #expect(one.hasMultipleHosts == false)
         #expect(one.hostLabel == nil)
-        #expect(one.minimalTileStatus == nil)
+        #expect(one.compact(screenWidth: 430).letter == nil)
         #expect(one.accessibilityLabel == "1 working")
 
         let two = AgentActivityIslandPresentation(
             presentation: .countsOnly(counts: .init(working: 1, blocked: 1, done: 0)),
             hostID: "host", hostSnapshot: twoHosts)
-        #expect(two.hostLabel == "L")
-        #expect(two.minimalTileStatus == "blocked")
+        #expect(two.compact(screenWidth: 430).letter == "L")
+        #expect(two.tallies == [.init(status: "blocked", count: 1), .init(status: "working", count: 1)])
         #expect(two.accessibilityLabel == "Laptop, 1 needs you, 1 working")
 
-        let missing = AgentActivityIslandPresentation(
-            presentation: .countsOnly(counts: .init(working: 1, blocked: 0, done: 1)),
-            hostID: "missing", hostSnapshot: twoHosts)
-        #expect(missing.hasMultipleHosts)
-        #expect(missing.hostLabel == nil)
-        #expect(missing.minimalTileStatus == nil)
-    }
-
-    @Test func islandMinimalTileUsesTheMostUrgentCount() {
-        let snapshot = LiveActivityHostSnapshot(v: 1, hosts: [
-            .init(id: "host", name: "Laptop", label: "L"),
-            .init(id: "other", name: "Oak4d", label: "O"),
-        ])
-        let cases: [(AgentActivityAttributes.ContentState.Counts, String)] = [
-            (.init(working: 5, blocked: 1, done: 1), "blocked"),
-            (.init(working: 5, blocked: 0, done: 1), "done"),
-            (.init(working: 5, blocked: 0, done: 0), "working"),
-        ]
-        for (counts, status) in cases {
-            let island = AgentActivityIslandPresentation(
-                presentation: .countsOnly(counts: counts), hostID: "host", hostSnapshot: snapshot)
-            #expect(island.minimalTileStatus == status)
-        }
-    }
-
-    @Test func islandMissingLabelsOmitTilesButKeepTheFullAccessibilitySummary() {
         for label in [nil, ""] as [String?] {
             let snapshot = LiveActivityHostSnapshot(v: 1, hosts: [
                 .init(id: "host", name: "Laptop", label: label),
                 .init(id: "other", name: "Oak4d", label: "O"),
             ])
-            let island = AgentActivityIslandPresentation(
+            let unlabeled = AgentActivityIslandPresentation(
                 presentation: .countsOnly(counts: .init(working: 1, blocked: 2, done: 1)),
                 hostID: "host", hostSnapshot: snapshot)
-            #expect(island.hostLabel == nil)
-            #expect(island.minimalTileStatus == nil)
-            #expect(island.accessibilityLabel == "Laptop, 2 need you, 1 working, 1 done")
+            #expect(unlabeled.hostLabel == nil)
+            #expect(unlabeled.accessibilityLabel == "Laptop, 2 need you, 1 done, 1 working")
         }
-        let noSnapshot = AgentActivityIslandPresentation(
-            presentation: .countsOnly(counts: .init(working: 1, blocked: 1, done: 1)),
-            hostID: "host", hostSnapshot: nil)
-        #expect(noSnapshot.hostLabel == nil)
-        #expect(noSnapshot.accessibilityLabel == "1 needs you, 1 working, 1 done")
     }
 
     @Test func narrationIncludesStatusForIslandAccessibility() {
@@ -381,8 +416,6 @@ struct AgentActivityPresentationTests {
         #expect(presentation.lockScreenAgents(isStale: true).count == 2)
         #expect(presentation.lockScreenTrailingCaption(isStale: true)
             == "+3 more · May be out of date")
-        #expect(presentation.expandedAgents.count == 2)
-        #expect(presentation.overflowCount == 3)
         let three = configuredPresentation(agentCount: 3)
         #expect(three.lockScreenAgents(isStale: false).count == 2)
         #expect(three.lockScreenAgents(isStale: true).count == 2)
@@ -404,160 +437,118 @@ struct AgentActivityPresentationTests {
         #expect(presentation.lockScreenOverflowCount(isStale: true) == 3)
     }
 
-    /// The island clips its expanded content short of the 160 pt limit, which
-    /// used to cut the overflow caption in half under two three-row Agents.
     @MainActor
-    @Test func expandedIslandRowsStayInsideTheHeightTheIslandLeavesThem() throws {
-        for count in [1, 2, 3, 5] {
-            let presentation = configuredPresentation(agentCount: count)
-            let rows = AgentActivityIslandRows(presentation: presentation, hostID: "host")
-                .frame(width: 335)
-            #expect(
-                try renderedSize(rows).height <= AgentActivityIslandMetrics.rowsHeightBudget + 0.5,
-                "\(count) agents")
-        }
-        let three = configuredPresentation(agentCount: 3)
-        #expect(three.expandedAgents.count == 2)
-        #expect(three.overflowCount == 1)
-    }
-
-    /// Larger text sizes grew the rows while the island stayed 160 pt tall.
-    @MainActor
-    @Test func expandedIslandRowsIgnoreLargerDynamicTypeSizes() throws {
-        let rows = AgentActivityIslandRows(
-            presentation: configuredPresentation(agentCount: 3), hostID: "host"
-        )
-        .frame(width: 335)
-        let standard = try renderedSize(rows.environment(\.dynamicTypeSize, .large))
-        let enlarged = try renderedSize(rows.environment(\.dynamicTypeSize, .accessibility3))
-        #expect(enlarged.height == standard.height)
-    }
-
-    @MainActor
-    @Test func compactAndMinimalIslandEvidenceFitsAtBothTypeSizes() throws {
-        let oneHost = LiveActivityHostSnapshot(v: 1, hosts: [
+    @Test func compactSidesRenderAtOneWidthAndRecordEvidence() throws {
+        let twoHosts = LiveActivityHostSnapshot(v: 1, hosts: [
             .init(id: "host", name: "Laptop", label: "L"),
+            .init(id: "other", name: "MacBook", label: "MB"),
         ])
-        let twoHosts = LiveActivityHostSnapshot(v: 1, hosts: oneHost.hosts + [
-            .init(id: "oak", name: "Oak4d", label: "O"),
-        ])
-        let compactCases: [(String, AgentActivityAttributes.ContentState.Counts, LiveActivityHostSnapshot)] = [
-            ("working", .init(working: 1, blocked: 0, done: 0), oneHost),
-            ("mixed", .init(working: 1, blocked: 1, done: 1), oneHost),
-            ("blocked", .init(working: 0, blocked: 1, done: 0), oneHost),
-            ("overflow", .init(working: 7, blocked: 0, done: 0), oneHost),
-            ("two-host-l", .init(working: 1, blocked: 1, done: 1), twoHosts),
-            ("two-host-wide-overflow", .init(working: 5, blocked: 1, done: 1),
-                LiveActivityHostSnapshot(v: 1, hosts: [
-                    .init(id: "host", name: "10.0.180.255", label: "180.255"),
-                    .init(id: "other", name: "10.0.181.255", label: "181.255"),
-                ])),
+        let cases: [(String, Counts, LiveActivityHostSnapshot?)] = [
+            ("working", .init(working: 2, blocked: 0, done: 0), nil),
+            ("blocked-done", .init(working: 0, blocked: 1, done: 2), nil),
+            ("all-three", .init(working: 1, blocked: 1, done: 1), nil),
+            ("big", .init(working: 15, blocked: 1, done: 12), nil),
+            ("letter-one", .init(working: 0, blocked: 1, done: 0), twoHosts),
+            ("letter-two", .init(working: 3, blocked: 0, done: 2), twoHosts),
+            ("letter-three", .init(working: 1, blocked: 1, done: 1), twoHosts),
         ]
-        for size in [DynamicTypeSize.large, .accessibility3] {
-            for (name, counts, snapshot) in compactCases {
+        for width in [430, 393] as [CGFloat] {
+            for (name, counts, snapshot) in cases {
                 let island = AgentActivityIslandPresentation(
                     presentation: .countsOnly(counts: counts), hostID: "host", hostSnapshot: snapshot)
-                let bitmap = try RenderedBitmap(
-                    HStack(spacing: 0) {
-                        AgentActivityCompactLeading(presentation: island)
-                        Color.clear.frame(width: 126)
-                        AgentActivityCompactTrailing(presentation: island)
-                    }
-                    .padding(.horizontal, 11)
-                    .frame(height: 37)
-                    .background(Color.black)
-                    .environment(\.dynamicTypeSize, size)
-                    .environment(\.colorScheme, .light),
-                    proposedSize: .unspecified, scale: 2)
-                #expect(bitmap.size.width <= 240, "\(name), \(size)")
-                #expect(bitmap.size.height == 37)
-                Attachment.record(try bitmap.image(),
-                    named: "island-b2-compact-\(name)-\(size)", as: .png)
-            }
-            for (name, counts) in [
-                ("single", AgentActivityAttributes.ContentState.Counts(working: 1, blocked: 0, done: 0)),
-                ("mixed", .init(working: 1, blocked: 1, done: 1)),
-                ("overflow", .init(working: 7, blocked: 0, done: 0)),
-                ("done", .init(working: 0, blocked: 0, done: 1)),
-            ] {
-                for (hostCount, snapshot) in [(1, oneHost), (2, twoHosts)] {
-                    let island = AgentActivityIslandPresentation(
-                        presentation: .countsOnly(counts: counts), hostID: "host", hostSnapshot: snapshot)
-                    let content = AgentActivityMinimal(presentation: island)
-                        .environment(\.dynamicTypeSize, size)
-                        .environment(\.colorScheme, .light)
-                    let naturalSize = try renderedSize(content)
-                    #expect(naturalSize.width <= 37)
-                    #expect(naturalSize.height <= 37)
-                    let bitmap = try RenderedBitmap(
-                        content.frame(width: 37, height: 37).background(Color.black),
-                        proposedSize: .unspecified, scale: 2)
-                    Attachment.record(try bitmap.image(),
-                        named: "island-b2-minimal-\(hostCount)-host-\(name)-\(size)", as: .png)
+                let sides = [AgentActivityCompactSide.Edge.leading, .trailing].map {
+                    AgentActivityCompactSide(presentation: island, edge: $0, screenWidth: width)
                 }
+                let layout = island.compact(screenWidth: width)
+                for edge in [AgentActivityCompactSide.Edge.leading, .trailing] {
+                    let row = AgentActivityCompactRow(layout: layout, edge: edge)
+                    #expect(abs(try renderedSize(row).width - layout.sideWidth) < 0.5, "\(name) at \(width)")
+                    #expect(
+                        try renderedSize(row.content).width <= layout.sideWidth + 1,
+                        "\(name) at \(width): drawn wider than its side")
+                }
+                let bitmap = try RenderedBitmap(
+                    HStack(spacing: 3) {
+                        sides[0]
+                        Color.clear.frame(width: 125.3)
+                        sides[1]
+                    }
+                    .padding(.horizontal, 6)
+                    .frame(height: 36.7)
+                    .background(Color.black, in: Capsule()),
+                    proposedSize: .unspecified, scale: 3)
+                Attachment.record(try bitmap.image(), named: "island-compact-\(Int(width))-\(name)", as: .png)
             }
         }
     }
 
     @MainActor
-    @Test func expandedIslandEvidenceIncludesHostHeadingsAndCompleteRows() throws {
-        let hostCases = [
-            ("laptop", "Laptop", "L"),
-            ("long-name", "workstation-west-build-01", "W"),
-            ("ip-name", "192.0.2.15", "15"),
-        ]
-        let statuses = ["blocked", "done", "working"]
-        let agents = statuses.enumerated().map { index, status in
-            var agent = agentDetail(paneID: "w1:p\(index)", status: status)
-            agent.rows = [
-                [.init(text: ["herdr", "arch", "docs"][index], bold: true)],
-                [.init(text: ["Redesign live activity", "Fix sshd forwarding", "Update changelog"][index])],
-            ]
-            return agent
+    @Test func minimalBadgeFillsTheTwentyPointBoxAndRecordsEvidence() throws {
+        for (name, counts) in [
+            ("blocked", Counts(working: 0, blocked: 1, done: 0)),
+            ("working-12", .init(working: 12, blocked: 0, done: 0)),
+            ("blocked-done-working", .init(working: 2, blocked: 1, done: 3)),
+            ("done-working", .init(working: 2, blocked: 0, done: 1)),
+        ] {
+            let island = AgentActivityIslandPresentation(
+                presentation: .countsOnly(counts: counts), hostID: "host", hostSnapshot: nil)
+            let badge = AgentActivityMinimal(presentation: island)
+            #expect(try renderedSize(badge) == CGSize(width: 20, height: 20), "\(name)")
+            let bitmap = try RenderedBitmap(
+                badge.frame(width: 36.7, height: 36.7).background(Color.black, in: Circle()),
+                proposedSize: .unspecified, scale: 3)
+            Attachment.record(try bitmap.image(), named: "island-minimal-\(name)", as: .png)
         }
-        for (name, hostName, label) in hostCases {
-            let snapshot = LiveActivityHostSnapshot(v: 1, hosts: [
-                .init(id: "host", name: hostName, label: label),
-                .init(id: "other", name: "Oak4d", label: "O"),
-            ])
+    }
+
+    @MainActor
+    @Test func expandedCardsFitTheIslandAndRecordEvidence() throws {
+        let names = ["herdr", "arch", "api", "cli", "docs", "web"]
+        let tasks = [
+            "Redesign live activity", "Fix sshd forwarding", "Add rate limits", "Bump version",
+            "Update changelog", "Build the settings page",
+        ]
+        func agents(_ statuses: [String]) -> [AgentActivityDetails.AgentDetail] {
+            statuses.enumerated().map { index, status in
+                var agent = agentDetail(paneID: "w1:p\(index)", status: status)
+                agent.rows = [[.init(text: names[index], bold: true)], [.init(text: tasks[index])]]
+                return agent
+            }
+        }
+        let twoHosts = LiveActivityHostSnapshot(v: 1, hosts: [
+            .init(id: "host", name: "Laptop", label: "L"),
+            .init(id: "other", name: "Mac mini", label: "M"),
+        ])
+        let oneHost = LiveActivityHostSnapshot(v: 1, hosts: [.init(id: "host", name: "198.51.100.15")])
+        let cases: [(String, [String], Counts, LiveActivityHostSnapshot)] = [
+            ("one-of-each", ["blocked", "done", "working"], .init(working: 1, blocked: 1, done: 1), twoHosts),
+            ("six", ["blocked", "done", "done", "done", "working"], .init(working: 2, blocked: 1, done: 3), twoHosts),
+            ("five-working", Array(repeating: "working", count: 5), .init(working: 5, blocked: 0, done: 0), twoHosts),
+            ("two-one-host", ["done", "working"], .init(working: 1, blocked: 0, done: 1), oneHost),
+        ]
+        for (name, statuses, counts, snapshot) in cases {
             let presentation = AgentActivityPresentation.detailed(
-                details: .init(hostName: "envelope-fallback", agents: agents),
-                counts: .init(working: 1, blocked: 1, done: 1))
+                details: .init(hostName: "envelope-fallback", agents: agents(statuses)), counts: counts)
             let island = AgentActivityIslandPresentation(
                 presentation: presentation, hostID: "host", hostSnapshot: snapshot)
-            #expect(island.hostName == hostName)
-            #expect(island.hostLabel == label)
-            #expect(presentation.expandedAgents.count == 3)
-            var standardHeight: CGFloat?
+            let expanded = AgentActivityIslandExpanded(presentation: presentation)
             for size in [DynamicTypeSize.large, .accessibility3] {
-                let rows = AgentActivityIslandRows(presentation: presentation, hostID: "host")
-                    .frame(width: 321)
-                    .environment(\.dynamicTypeSize, size)
-                #expect(try renderedSize(rows).height <= 100)
                 let bitmap = try RenderedBitmap(
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 0) {
                             AgentActivityIslandHeadline(presentation: island)
-                            AgentActivityIslandHeaderTrailing(presentation: island)
+                            AgentActivityIslandAgentTotal(total: expanded.total)
                         }
-                        rows
+                        AgentActivityIslandCards(expanded: expanded, hostID: "host")
                     }
                     .padding(.horizontal, AgentActivityIslandMetrics.expandedSideMargin)
-                    .padding(.top, 13)
-                    .padding(.bottom, 13)
-                    .frame(width: 371)
-                    .background(Color.black)
-                    .environment(\.dynamicTypeSize, size)
-                    .environment(\.colorScheme, .light),
-                    proposedSize: .unspecified, scale: 2)
-                #expect(bitmap.size.height <= 160)
-                if let standardHeight {
-                    #expect(bitmap.size.height == standardHeight)
-                } else {
-                    standardHeight = bitmap.size.height
-                }
-                Attachment.record(try bitmap.image(),
-                    named: "island-b2-expanded-\(name)-\(size)", as: .png)
+                    .padding(.vertical, 14)
+                    .frame(width: 408)
+                    .background(Color.black, in: RoundedRectangle(cornerRadius: 44, style: .continuous))
+                    .environment(\.dynamicTypeSize, size),
+                    proposedSize: .unspecified, scale: 3)
+                #expect(bitmap.size.height <= 160, "\(name), \(size)")
+                Attachment.record(try bitmap.image(), named: "island-expanded-\(name)-\(size)", as: .png)
             }
         }
     }
