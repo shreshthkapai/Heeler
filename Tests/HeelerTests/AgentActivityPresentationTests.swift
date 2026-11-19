@@ -465,9 +465,10 @@ struct AgentActivityPresentationTests {
                 for edge in [AgentActivityCompactSide.Edge.leading, .trailing] {
                     let row = AgentActivityCompactRow(layout: layout, edge: edge)
                     #expect(abs(try renderedSize(row).width - layout.sideWidth) < 0.5, "\(name) at \(width)")
+                    let drawn = try renderedSize(row.content).width
                     #expect(
-                        try renderedSize(row.content).width <= layout.sideWidth + 0.5,
-                        "\(name) at \(width): drawn wider than its side")
+                        drawn <= layout.sideWidth + 0.5,
+                        "\(name) at \(width): drawn \(drawn) wide, side \(layout.sideWidth)")
                 }
                 let bitmap = try RenderedBitmap(
                     HStack(spacing: 3) {
