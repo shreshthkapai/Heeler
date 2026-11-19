@@ -1,0 +1,48 @@
+name: Fork island live Mac
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: How long to keep the Mac open
+        default: '4'
+permissions:
+  contents: read
+concurrency:
+  group: fork-island-live
+  cancel-in-progress: false
+jobs:
+  live:
+    if: github.repository == 'shreshthkapai/Heeler'
+    runs-on: xcode-27
+    timeout-minutes: 350
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v5
+      - name: Join the tailnet
+        uses: tailscale/github-action@v3
+        with:
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          tags: tag:ci
+          hostname: heeler-mac
+          args: --ssh
+      - run: brew install xcodegen
+      - name: Boot one Simulator per phone width
+        run: |
+          xcrun simctl list runtimes -j > /tmp/runtimes.json
+          for want in iPhone-16 iPhone-18-Pro iPhone-16-Plus iPhone-16-Pro-Max; do
+            type="com.apple.CoreSimulator.SimDeviceType.$want"
+            runtime=$(python3 -c "
+          import json,sys
+          rs=[r for r in json.load(open(sys.argv[1]))['runtimes'] if r['platform']=='iOS' and r['isAvailable'] and any(d['identifier']==sys.argv[2] for d in r.get('supportedDeviceTypes',[]))]
+          print(rs[-1]['identifier'] if rs else '')" /tmp/runtimes.json "$type")
+            [ -n "$runtime" ] || { echo "no runtime for $want"; continue; }
+            udid=$(xcrun simctl create "live-$want" "$type" "$runtime")
+            xcrun simctl boot "$udid"
+            xcrun simctl status_bar "$udid" override --time 9:41 --batteryLevel 100 --cellularBars 4 --wifiBars 3
+            echo "$want $udid" | tee -a ~/live-sims.txt
+          done
+      - name: Stay open (touch ~/stop to end early)
+        run: |
+          end=$(( $(date +%s) + ${{ inputs.hours }} * 3600 ))
+          while [ "$(date +%s)" -lt "$end" ] && [ ! -e ~/stop ]; do sleep 30; done
