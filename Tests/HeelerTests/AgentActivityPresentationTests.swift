@@ -173,8 +173,9 @@ struct AgentActivityPresentationTests {
         #expect(one.sideWidth == level.symbol)
 
         let lettered = compact(.init(working: 1, blocked: 1, done: 1), letter: "L")
-        let pair = level.symbol + level.symbolGap + level.digit
-        let trailing = pair + level.itemSpacing + level.digit
+        let digit = level.unit * 0.6
+        let pair = level.symbol + level.symbolGap + digit
+        let trailing = pair + level.itemSpacing + digit
         let leading = pair * 2 + level.itemSpacing
         #expect(abs(lettered.sideWidth - max(leading, trailing)) < 0.001)
     }
@@ -459,12 +460,13 @@ struct AgentActivityPresentationTests {
                 let sides = [AgentActivityCompactSide.Edge.leading, .trailing].map {
                     AgentActivityCompactSide(presentation: island, edge: $0, screenWidth: width)
                 }
-                let layout = island.compact(screenWidth: width)
+                let layout = island.compact(screenWidth: width, textWidths: .font)
+                #expect(layout.level == island.compact(screenWidth: width).level)
                 for edge in [AgentActivityCompactSide.Edge.leading, .trailing] {
                     let row = AgentActivityCompactRow(layout: layout, edge: edge)
                     #expect(abs(try renderedSize(row).width - layout.sideWidth) < 0.5, "\(name) at \(width)")
                     #expect(
-                        try renderedSize(row.content).width <= layout.sideWidth + 1,
+                        try renderedSize(row.content).width <= layout.sideWidth + 0.5,
                         "\(name) at \(width): drawn wider than its side")
                 }
                 let bitmap = try RenderedBitmap(
