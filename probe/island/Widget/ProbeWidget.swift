@@ -169,6 +169,39 @@ private func minimalCounts(_ variant: String) -> (Int, Int, Int)? {
     }
 }
 
+/// Landscape (approved section 7): in limited width, minimal B above the camera and the Host letter below.
+private func landParts(_ variant: String) -> (counts: (Int, Int, Int), letter: String)? {
+    let parts = variant.split(separator: "-", omittingEmptySubsequences: false)
+    guard parts.count == 3, parts[0] == "land", let counts = minimalCounts("min-\(parts[1])") else { return nil }
+    return (counts, String(parts[2]))
+}
+
+private struct LandLeading: View {
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limited
+    let variant: String
+    var body: some View {
+        if let land = landParts(variant), limited {
+            MinimalB(blocked: land.counts.0, done: land.counts.1, working: land.counts.2)
+        } else {
+            Leading(variant: variant)
+        }
+    }
+}
+
+private struct LandTrailing: View {
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limited
+    let variant: String
+    var body: some View {
+        if let land = landParts(variant), limited {
+            if !land.letter.isEmpty {
+                Text(land.letter).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(white: 0.68))
+            }
+        } else {
+            Trailing(variant: variant)
+        }
+    }
+}
+
 struct ProbeWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: ProbeAttributes.self) { context in
@@ -177,11 +210,11 @@ struct ProbeWidget: Widget {
             DynamicIsland {
                 DynamicIslandExpandedRegion(.center) { Text(context.state.variant) }
             } compactLeading: {
-                Leading(variant: context.state.variant)
+                LandLeading(variant: context.state.variant)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("probe-lead-\(context.state.variant)")
             } compactTrailing: {
-                Trailing(variant: context.state.variant)
+                LandTrailing(variant: context.state.variant)
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("probe-trail-\(context.state.variant)")
             } minimal: {

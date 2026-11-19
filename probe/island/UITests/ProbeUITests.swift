@@ -46,10 +46,13 @@ final class ProbeUITests: XCTestCase {
     }
 
     func test3Landscape() {
-        start("dev.example.islandprobe", "design-3")
-        start("dev.example.islandprobe.other", "none")
-        XCUIDevice.shared.orientation = .landscapeLeft
-        record("landscape")
-        XCUIDevice.shared.orientation = .portrait
+        for variant in ["land-132-L", "land-132-", "land-005-L", "land-100-"] {
+            start("dev.example.islandprobe", variant)
+            start("dev.example.islandprobe.other", "none")
+            XCUIDevice.shared.orientation = .landscapeLeft
+            record("landscape-\(variant)")
+            XCUIDevice.shared.orientation = .portrait
+            sleep(2)
+        }
     }
 }
