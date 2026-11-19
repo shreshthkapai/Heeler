@@ -1,10 +1,7 @@
 name: Fork island live Mac
 on:
-  workflow_dispatch:
-    inputs:
-      hours:
-        description: How long to keep the Mac open
-        default: '4'
+  push:
+    branches: ['fork-ci/island-live']
 permissions:
   contents: read
 concurrency:
@@ -44,5 +41,5 @@ jobs:
           done
       - name: Stay open (touch ~/stop to end early)
         run: |
-          end=$(( $(date +%s) + ${{ inputs.hours }} * 3600 ))
+          end=$(( $(date +%s) + 5 * 3600 ))
           while [ "$(date +%s)" -lt "$end" ] && [ ! -e ~/stop ]; do sleep 30; done
