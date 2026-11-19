@@ -28,7 +28,10 @@ targets:
   IslandProbeWidget:
     type: app-extension
     platform: iOS
-    sources: [Widget, Shared]
+    sources:
+      - path: Widget
+        excludes: ["Info.plist"]
+      - Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandprobe.widget
@@ -53,7 +56,10 @@ targets:
   IslandProbeOtherWidget:
     type: app-extension
     platform: iOS
-    sources: [Widget, Shared]
+    sources:
+      - path: Widget
+        excludes: ["Info.plist"]
+      - Shared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.example.islandprobe.other.widget
