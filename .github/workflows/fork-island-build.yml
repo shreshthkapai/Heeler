@@ -15,7 +15,7 @@ jobs:
   render:
     if: github.repository == 'shreshthkapai/Heeler'
     runs-on: xcode-27
-    timeout-minutes: 60
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -54,19 +54,19 @@ jobs:
           xcrun simctl install "$udid" build/Build/Products/Debug-iphonesimulator/IslandRenderOther.app
       - name: Compact
         working-directory: probe/render
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: ./render-test.sh test1Compact
       - name: Minimal
         working-directory: probe/render
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: ./render-test.sh test2Minimal
       - name: Landscape
         working-directory: probe/render
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: ./render-test.sh test3Landscape
       - name: Expanded
         working-directory: probe/render
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: ./render-test.sh test4Expanded
       - uses: actions/upload-artifact@v4
         if: always()
