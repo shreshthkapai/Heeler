@@ -53,6 +53,7 @@ jobs:
             xcrun simctl install "$udid" "$other"
             xcodebuild test-without-building -project IslandProbe.xcodeproj -scheme IslandProbe \
               -destination "id=$udid" -derivedDataPath build -resultBundlePath "$OUT/$want.xcresult" \
+              -only-testing:IslandProbeUITests/ProbeUITests/test2TwoActivities \
               > "$OUT/$want-test.log" 2>&1
             echo "test exit $?"
             grep -c PROBE-BEGIN "$OUT/$want-test.log"
