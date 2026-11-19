@@ -29,7 +29,7 @@ jobs:
         run: |
           mkdir -p "$OUT"
           make build-ci-app > "$OUT/build.log" 2>&1; status=$?
-          tail -40 "$OUT/build.log"; grep -E "error:" "$OUT/build.log" | head -40
+          tail -40 "$OUT/build.log"; grep -E "error:" "$OUT/build.log" | head -40 || true
           exit $status
       - name: Run the island and relevance suites
         run: |
@@ -80,7 +80,7 @@ jobs:
           xcodebuild -project IslandRender.xcodeproj -scheme IslandRender -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build build-for-testing \
             > "$OUT/build.log" 2>&1; status=$?
-          tail -20 "$OUT/build.log"; grep -E "error:" "$OUT/build.log" | head -40
+          tail -20 "$OUT/build.log"; grep -E "error:" "$OUT/build.log" | head -40 || true
           [ $status -eq 0 ] || exit $status
           xcodebuild -project IslandRender.xcodeproj -scheme IslandRenderOther -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath build build | tail -5
