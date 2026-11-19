@@ -12,7 +12,7 @@ jobs:
   probe:
     if: github.repository == 'shreshthkapai/Heeler'
     runs-on: xcode-27
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         shell: bash
@@ -28,17 +28,18 @@ jobs:
           mkdir -p "$OUT"
           xcodebuild -version | tee "$OUT/toolchain.txt"
           xcodegen generate
-          xcodebuild -project IslandProbe.xcodeproj -scheme IslandProbe \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build build | tail -30
-      - name: Screenshot each variant on each phone
+          xcodebuild -project IslandProbe.xcodeproj -scheme IslandProbe -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build build-for-testing | tail -20
+          xcodebuild -project IslandProbe.xcodeproj -scheme IslandProbeOther -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath build build | tail -5
+      - name: Read island positions on each phone
         working-directory: probe/island
         run: |
           set +e
-          app=build/Build/Products/Debug-iphonesimulator/IslandProbe.app
           xcrun simctl list runtimes -j > "$OUT/runtimes.json"
           xcrun simctl list devicetypes > "$OUT/devicetypes.txt"
-          for want in iPhone-16-Plus iPhone-15-Plus iPhone-15-Pro-Max iPhone-17-Pro-Max iPhone-17; do
+          other=build/Build/Products/Debug-iphonesimulator/IslandProbeOther.app
+          for want in iPhone-16-Plus iPhone-18-Pro; do
             type="com.apple.CoreSimulator.SimDeviceType.$want"
             runtime=$(python3 -c "
           import json,sys
@@ -47,23 +48,18 @@ jobs:
             echo "== $want on ${runtime:-no runtime}"
             [ -n "$runtime" ] || continue
             udid=$(xcrun simctl create "probe-$want" "$type" "$runtime") || continue
-            xcrun simctl boot "$udid" && xcrun simctl bootstatus "$udid" -b || continue
+            xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
             xcrun simctl status_bar "$udid" override --time 9:41 --batteryLevel 100 --cellularBars 4 --wifiBars 3
-            xcrun simctl install "$udid" "$app" || continue
-            open -a Simulator --args -CurrentDeviceUDID "$udid"
-            sleep 20
-            for v in nofix equal-inward design-3 design-2 design-1; do
-              xcrun simctl launch --terminate-running-process "$udid" dev.example.islandprobe -variant "$v"
-              sleep 6
-              xcrun simctl launch "$udid" com.apple.Preferences
-              sleep 4
-              xcrun simctl io "$udid" screenshot "$OUT/$want-$v.png"
-              screencapture -x "$OUT/$want-$v-screen.png"
-            done
-            xcrun simctl spawn "$udid" log show --last 5m --predicate 'eventMessage CONTAINS "PROBE"' > "$OUT/$want-log.txt"
+            xcrun simctl install "$udid" "$other"
+            xcodebuild test-without-building -project IslandProbe.xcodeproj -scheme IslandProbe \
+              -destination "id=$udid" -derivedDataPath build -resultBundlePath "$OUT/$want.xcresult" \
+              > "$OUT/$want-test.log" 2>&1
+            echo "test exit $?"
+            grep -c PROBE-BEGIN "$OUT/$want-test.log"
+            xcrun xcresulttool export attachments --path "$OUT/$want.xcresult" --output-path "$OUT/$want-attachments"
             xcrun simctl shutdown "$udid"
-            killall Simulator; sleep 3
           done
+          cp ~/Library/Logs/DiagnosticReports/*Widget* "$OUT/" 2>/dev/null
           ls -la "$OUT"
       - uses: actions/upload-artifact@v4
         if: always()

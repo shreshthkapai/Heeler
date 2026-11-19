@@ -14,6 +14,7 @@ struct ProbeApp: App {
     private func start() async {
         let args = ProcessInfo.processInfo.arguments
         let variant = args.firstIndex(of: "-variant").map { args[$0 + 1] } ?? "nofix"
+        if variant == "none" { status = "no activity"; return }
         for activity in Activity<ProbeAttributes>.activities {
             await activity.end(nil, dismissalPolicy: .immediate)
         }

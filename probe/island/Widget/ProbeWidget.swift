@@ -58,6 +58,10 @@ private struct Leading: View {
             HStack(spacing: 4.5) { Pair(status: .blocked, count: 1); Pair(status: .done, count: 1) }
                 .frame(width: 57, alignment: .trailing)
         case "design-2": Pair(status: .blocked, count: 1).frame(width: 27, alignment: .trailing)
+        case "letter-2":
+            HStack(spacing: 6) { Pair(status: .blocked, count: 1); Pair(status: .working, count: 4) }
+                .frame(width: 57, alignment: .trailing)
+        case "other": Text("OT").font(.system(size: 15, weight: .semibold)).foregroundStyle(.orange)
         default: Mark(status: .working).frame(width: 15, alignment: .trailing)
         }
     }
@@ -71,6 +75,10 @@ private struct Trailing: View {
         case "equal-inward": bar(.blue, 13).frame(width: 54, alignment: .leading)
         case "design-3": Pair(status: .working, count: 1).frame(width: 57, alignment: .leading)
         case "design-2": Pair(status: .working, count: 4).frame(width: 27, alignment: .leading)
+        case "letter-2":
+            Text("L").font(.system(size: 15, weight: .semibold)).foregroundStyle(.gray)
+                .frame(width: 57, alignment: .leading)
+        case "other": Text("99").font(.system(size: 15, weight: .semibold)).foregroundStyle(.orange)
         default:
             Text("1").font(.system(size: 15.5, weight: .semibold)).foregroundStyle(working)
                 .frame(width: 15, alignment: .leading)
@@ -87,10 +95,16 @@ struct ProbeWidget: Widget {
                 DynamicIslandExpandedRegion(.center) { Text(context.state.variant) }
             } compactLeading: {
                 Leading(variant: context.state.variant)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("probe-lead-\(context.state.variant)")
             } compactTrailing: {
                 Trailing(variant: context.state.variant)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("probe-trail-\(context.state.variant)")
             } minimal: {
                 Mark(status: .blocked)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("probe-minimal-\(context.state.variant)")
             }
         }
     }
