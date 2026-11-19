@@ -45,6 +45,8 @@ final class RenderUITests: XCTestCase {
         for variant in [
             "|0,0,2|", "|0,3,0|", "|1,0,0|", "|1,2,0|", "|1,0,4|", "|0,2,3|", "|1,1,1|",
             "|1,12,15|", "|10,12,15|", "L|1,0,0|", "L|0,2,3|", "L|1,1,1|", "MB|1,1,1|", "MB|1,12,15|",
+            "L|0,0,2|", "L|0,3,0|", "L|1,2,0|", "L|1,0,4|", "Mm|1,1,1|", "15|1,1,1|", "W|1,1,1|",
+            "|0,0,12|", "|0,12,15|", "L|1,12,15|", "MB|10,12,15|",
         ] {
             start("dev.example.islandrender", variant)
             XCUIDevice.shared.press(.home)
@@ -65,7 +67,10 @@ final class RenderUITests: XCTestCase {
     func test3Landscape() {
         start("dev.example.islandrender.other", "none")
         warmUp()
-        for variant in ["L|1,3,2|", "|1,3,2|", "L|0,0,5|", "|1,0,0|", "MB|0,0,12|"] {
+        for variant in [
+            "L|1,3,2|", "|1,3,2|", "L|0,0,5|", "|1,0,0|", "MB|0,0,12|", "|0,1,2|", "|0,0,5|",
+            "|0,0,12|", "L|0,1,2|", "L|1,0,0|", "L|0,0,12|", "MB|1,3,2|",
+        ] {
             start("dev.example.islandrender", variant)
             // iOS hides an app's own island while it is in front.
             other.activate()

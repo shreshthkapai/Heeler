@@ -2,66 +2,16 @@ name: Fork island build
 on:
   workflow_dispatch:
   push:
-    branches: ['fork-ci/island-build']
+    branches: ['fork-ci/island-393']
 permissions:
   contents: read
 concurrency:
-  group: fork-island-build-${{ github.ref }}
+  group: fork-island-393-${{ github.ref }}
   cancel-in-progress: true
 defaults:
   run:
     shell: bash
 jobs:
-  unit:
-    if: github.repository == 'shreshthkapai/Heeler'
-    runs-on: xcode-27
-    timeout-minutes: 60
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
-      OUT: ${{ github.workspace }}/unit-results
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - run: make verify-ssh-artifacts
-      - name: Build app and tests
-        run: |
-          mkdir -p "$OUT"
-          make build-ci-app > "$OUT/build.log" 2>&1; status=$?
-          tail -40 "$OUT/build.log"; grep -E "error:" "$OUT/build.log" | head -40 || true
-          exit $status
-      - name: Run the island and relevance suites
-        run: |
-          xcrun simctl list runtimes -j > "$OUT/runtimes.json"
-          type=com.apple.CoreSimulator.SimDeviceType.iPhone-16-Plus
-          runtime=$(python3 -c "
-          import json,sys
-          rs=[r for r in json.load(open(sys.argv[1]))['runtimes'] if r['platform']=='iOS' and r['isAvailable'] and any(d['identifier']==sys.argv[2] for d in r.get('supportedDeviceTypes',[]))]
-          print(rs[-1]['identifier'])" "$OUT/runtimes.json" "$type")
-          udid=$(xcrun simctl create unit "$type" "$runtime")
-          xcrun simctl boot "$udid"; xcrun simctl bootstatus "$udid" -b
-          set +e
-          xcodebuild test-without-building -project Heeler.xcodeproj -scheme Heeler \
-            -destination "id=$udid" -derivedDataPath .ci/app-derived \
-            -clonedSourcePackagesDirPath .ci/source-packages \
-            -resultBundlePath "$OUT/unit.xcresult" \
-            -only-testing:HeelerTests/AgentActivityPresentationTests \
-            -only-testing:HeelerTests/AgentActivityContentStateTests \
-            -only-testing:HeelerTests/LiveActivityHostSnapshotTests \
-            -only-testing:HeelerTests/AgentActivityContentBuilderTests \
-            > "$OUT/test.log" 2>&1
-          status=$?
-          grep -E "✘|✔ Test run|Test run with|failed|passed after|error:" "$OUT/test.log" | tail -80
-          xcrun xcresulttool export attachments --path "$OUT/unit.xcresult" --output-path "$OUT/attachments"
-          rm -rf "$OUT/unit.xcresult"
-          exit $status
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: island-unit-${{ github.sha }}
-          path: unit-results
-          retention-days: 14
   render:
     if: github.repository == 'shreshthkapai/Heeler'
     runs-on: xcode-27
@@ -69,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        phone: [iPhone-16-Plus, iPhone-18-Pro, iPhone-16-Pro]
+        phone: [iPhone-16, iPhone-16-Plus]
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.2.app/Contents/Developer
       OUT: ${{ github.workspace }}/render-results
